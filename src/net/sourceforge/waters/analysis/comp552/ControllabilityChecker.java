@@ -37,10 +37,7 @@ import net.sourceforge.waters.model.base.ComponentKind;
 import net.sourceforge.waters.model.base.EventKind;
 import net.sourceforge.waters.model.des.*;
 
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.*;
 
 /**
  * <P>A dummy implementation of a controllability checker.</P>
@@ -87,6 +84,11 @@ public class ControllabilityChecker extends ModelChecker {
   private HashSet<EventProxy>[] eventsInAutomata;
 
   /**
+   * An array of mappings between source states and transitions states for each automata.
+   */
+  private HashMap<StateProxy, List<TransitionProxy>>[] transitionsBySource;
+
+  /**
    * A state tuple encoder to convert between a state tuple and the long representation of the state tuple.
    */
   private StateTupleEncoder stateTupleEncoder;
@@ -122,11 +124,8 @@ public class ControllabilityChecker extends ModelChecker {
   @Override
   public boolean run() {
     ProductDESProxy model = getModel();
-    automata = getAutomata(model);
-    events = getEvents(model);
-    eventsInAutomata = getEventsInAutomata(automata);
 
-    stateTupleEncoder = new StateTupleEncoder(automata);
+    setup(model);
 
     StateTupleSet stateTupleSet = new StateTupleSet();
     stateTupleSet.add(stateTupleEncoder.encode(getInitialState(automata)));
@@ -143,7 +142,7 @@ public class ControllabilityChecker extends ModelChecker {
           AutomatonProxy automaton = automata[i];
           if (!eventsInAutomata[i].contains(event)) {
             nextState[i] = currentState[i];
-          } else if ((temp = getTarget(automaton, currentState[i], event)) != null) {
+          } else if ((temp = getTarget(i, currentState[i], event)) != null) {
             nextState[i] = temp;
           } else if (event.getKind() == EventKind.UNCONTROLLABLE && automaton.getKind() == ComponentKind.SPEC) {
             return false;
@@ -162,10 +161,13 @@ public class ControllabilityChecker extends ModelChecker {
     return true;
   }
 
-  private StateProxy getTarget(AutomatonProxy automaton, StateProxy source, EventProxy event) {
-    for (TransitionProxy transition : automaton.getTransitions()) {
-      if (transition.getEvent() == event && transition.getSource() == source)
-        return transition.getTarget();
+  private StateProxy getTarget(int automatonIndex, StateProxy source, EventProxy event) {
+    List<TransitionProxy> possibleTransitions = transitionsBySource[automatonIndex].get(source);
+
+    if (possibleTransitions == null) return null;
+
+    for (TransitionProxy possibleTransition : possibleTransitions) {
+      if (possibleTransition.getEvent() == event) return possibleTransition.getTarget();
     }
 
     return null;
@@ -186,6 +188,14 @@ public class ControllabilityChecker extends ModelChecker {
     }
 
     return initialState;
+  }
+
+  private void setup(ProductDESProxy model) {
+    automata = getAutomata(model);
+    events = getEvents(model);
+    eventsInAutomata = getEventsInAutomata(automata);
+    transitionsBySource = getTransitionsBySource(automata);
+    stateTupleEncoder = new StateTupleEncoder(automata);
   }
 
   private AutomatonProxy[] getAutomata(ProductDESProxy model) {
@@ -229,6 +239,29 @@ public class ControllabilityChecker extends ModelChecker {
     }
 
     return eventsInAutomata;
+  }
+
+  private HashMap<StateProxy, List<TransitionProxy>>[] getTransitionsBySource(AutomatonProxy[] automata) {
+    HashMap<StateProxy, List<TransitionProxy>>[] transitionsBySource = new HashMap[automata.length];
+
+    for (int i = 0; i < transitionsBySource.length; i++) {
+      AutomatonProxy automaton = automata[i];
+
+      HashMap<StateProxy, List<TransitionProxy>> map = new HashMap<>();
+      for (TransitionProxy transition : automaton.getTransitions()) {
+        if (map.containsKey(transition.getSource())) {
+          map.get(transition.getSource()).add(transition);
+        } else {
+          List<TransitionProxy> list = new ArrayList<>();
+          list.add(transition);
+          map.put(transition.getSource(), list);
+        }
+      }
+
+      transitionsBySource[i] = map;
+    }
+
+    return transitionsBySource;
   }
 
   //#########################################################################
