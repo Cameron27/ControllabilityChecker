@@ -93,6 +93,11 @@ public class ControllabilityChecker extends ModelChecker {
    */
   private StateTupleEncoder stateTupleEncoder;
 
+  /**
+   * Set to contain all encountered state.
+   */
+  private StateTupleSet stateTupleSet;
+
   //#########################################################################
   //# Constructors
 
@@ -127,12 +132,14 @@ public class ControllabilityChecker extends ModelChecker {
 
     setup(model);
 
-    StateTupleSet stateTupleSet = new StateTupleSet();
-    stateTupleSet.add(stateTupleEncoder.encode(getInitialState(automata)));
+    stateTupleSet = new StateTupleSet();
+    long initialStateCode = stateTupleEncoder.encode(getInitialState(automata));
+    stateTupleSet.add(initialStateCode, initialStateCode);
 
     StateProxy[] nextState = new StateProxy[automata.length];
     while (stateTupleSet.containsUnvisited()) {
-      StateProxy[] currentState = stateTupleEncoder.decode(stateTupleSet.removeUnvisited());
+      long currentStateCode = stateTupleSet.removeUnvisited();
+      StateProxy[] currentState = stateTupleEncoder.decode(currentStateCode);
 
       for (EventProxy event : events) {
         StateProxy temp;
@@ -142,9 +149,10 @@ public class ControllabilityChecker extends ModelChecker {
           AutomatonProxy automaton = automata[i];
           if (!eventsInAutomata[i].contains(event)) {
             nextState[i] = currentState[i];
-          } else if ((temp = getTarget(i, currentState[i], event)) != null) {
+          } else if ((temp = getTargetFromSourceAndEvent(i, currentState[i], event)) != null) {
             nextState[i] = temp;
           } else if (event.getKind() == EventKind.UNCONTROLLABLE && automaton.getKind() == ComponentKind.SPEC) {
+            mCounterExample = computeCounterExample(currentState, event);
             return false;
           } else {
             success = false;
@@ -153,7 +161,7 @@ public class ControllabilityChecker extends ModelChecker {
         }
 
         if (success) {
-          stateTupleSet.add(stateTupleEncoder.encode(nextState));
+          stateTupleSet.add(stateTupleEncoder.encode(nextState), currentStateCode);
         }
       }
     }
@@ -161,7 +169,7 @@ public class ControllabilityChecker extends ModelChecker {
     return true;
   }
 
-  private StateProxy getTarget(int automatonIndex, StateProxy source, EventProxy event) {
+  private StateProxy getTargetFromSourceAndEvent(int automatonIndex, StateProxy source, EventProxy event) {
     List<TransitionProxy> possibleTransitions = transitionsBySource[automatonIndex].get(source);
 
     if (possibleTransitions == null) return null;
@@ -298,24 +306,64 @@ public class ControllabilityChecker extends ModelChecker {
    * the controllability check that may be needed to compute the
    * counterexample are still available.
    *
+   * @param end  The end state for the counter example.
+   * @param last The final uncontrollable event in the counter example.
    * @return The computed counterexample.
    */
-  private SafetyCounterExampleProxy computeCounterExample() {
-    // The following creates a trace that consists of all the events in
-    // the input model.
-    // This code is only here to demonstrate the use of the interfaces.
-    // IT DOES NOT GIVE A CORRECT COUNTEREXAMPLE!
-
+  private SafetyCounterExampleProxy computeCounterExample(StateProxy[] end, EventProxy last) {
     final ProductDESProxyFactory desFactory = getFactory();
     final ProductDESProxy des = getModel();
     final String desName = des.getName();
     final String traceName = desName + ":uncontrollable";
     final Collection<EventProxy> events = des.getEvents();
-    final List<EventProxy> eventList = new LinkedList<>();
-    for (final EventProxy event : events) {
-      eventList.add(event);
+    final LinkedList<EventProxy> eventList = new LinkedList<>();
+    eventList.add(last);
+
+    long currentStateCode = stateTupleEncoder.encode(end);
+    long previousStateCode;
+    StateProxy[] currentState = stateTupleEncoder.decode(currentStateCode);
+    StateProxy[] previousState;
+    long initialStateCode = stateTupleEncoder.encode(getInitialState(automata));
+    while (currentStateCode != initialStateCode) {
+      previousStateCode = stateTupleSet.getPrevious(currentStateCode);
+
+      previousState = stateTupleEncoder.decode(previousStateCode);
+
+      EventProxy event = getEventFromSourceAndTarget(previousState, currentState);
+      eventList.addFirst(event);
+
+      currentState = previousState;
+      currentStateCode = previousStateCode;
     }
-    return
-        desFactory.createSafetyCounterExampleProxy(traceName, des, eventList);
+
+
+    return desFactory.createSafetyCounterExampleProxy(traceName, des, eventList);
+  }
+
+  private EventProxy getEventFromSourceAndTarget(StateProxy[] source, StateProxy[] target) {
+    for (EventProxy event : events) {
+      boolean success = true;
+      for (int i = 0; i < source.length; i++) {
+        if (source[i] == target[i] && !eventsInAutomata[i].contains(event)) continue;
+
+        List<TransitionProxy> transitions = transitionsBySource[i].get(source[i]);
+        boolean subSuccess = false;
+        for (TransitionProxy transition : transitions) {
+          if (transition.getEvent() == event && transition.getTarget() == target[i]) {
+            subSuccess = true;
+            break;
+          }
+        }
+        if (subSuccess) continue;
+
+        success = false;
+        break;
+      }
+
+      if (success) return event;
+    }
+
+    assert false;
+    return null;
   }
 }

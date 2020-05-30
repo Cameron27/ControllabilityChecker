@@ -1,10 +1,12 @@
 package net.sourceforge.waters.analysis.comp552;
 
+import net.sourceforge.waters.model.analysis.AnalysisException;
 import net.sourceforge.waters.model.base.DocumentProxy;
 import net.sourceforge.waters.model.compiler.CompilerOperatorTable;
 import net.sourceforge.waters.model.compiler.ModuleCompiler;
 import net.sourceforge.waters.model.des.ProductDESProxy;
 import net.sourceforge.waters.model.des.ProductDESProxyFactory;
+import net.sourceforge.waters.model.des.SafetyCounterExampleProxy;
 import net.sourceforge.waters.model.expr.EvalException;
 import net.sourceforge.waters.model.expr.OperatorTable;
 import net.sourceforge.waters.model.marshaller.DocumentManager;
@@ -23,7 +25,7 @@ import javax.xml.parsers.ParserConfigurationException;
 import java.io.File;
 import java.io.IOException;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.*;
 
 public class Tests {
   private static final String[] simpleExampleNames = new String[]{"empty_1", "empty_2", "small_factory_2", "small_factory_2u", "bad_factory", "bfactory", "cat_mouse", "cell", "cell_block", "cell_uncont", "debounce", "elevator_safety", "elevator_liveness", "ipc", "ipc_cswitch", "ipc_lswitch", "ipc_lswitch_sup", "ipc_uswitch", "notinc15", "notinc20", "tictactoe", "wsp_timer", "wsp_timer_noreset"};
@@ -78,33 +80,40 @@ public class Tests {
   }
 
   @Test
-  public void testRunSimple() {
+  public void testRunSimple() throws AnalysisException {
     final boolean[] expected = new boolean[]{true, false, true, false, true, false, false, true, true, false, true, true, true, false, false, false, true, false, true, true, false, true, true};
-    boolean[] results = new boolean[expected.length];
+    ControllabilityCounterExampleChecker verifier = new ControllabilityCounterExampleChecker();
 
     for (int i = 0; i < simpleExampleNames.length; i++) {
       final ControllabilityChecker checker = new ControllabilityChecker(simpleModels[i], desFactory);
 
-      results[i] = checker.run();
-      assertEquals(expected[i], results[i]);
+      assertEquals(expected[i], checker.run());
+
+      SafetyCounterExampleProxy counterExample = checker.getCounterExample();
+      if (expected[i]) assertNull(counterExample);
+      else assertTrue(verifier.checkCounterExample(simpleModels[i], counterExample));
     }
   }
 
   @Test
-  public void testRunFull() {
+  public void testRunFull() throws AnalysisException {
     final boolean[] expected = new boolean[]{true, false, true, false, true, false, false, true, true, false, true, true, true, false, false, false, true, false, true, true, false, true, true, false, false, true, false, true, false, true, true, true, false, false, true, false, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, false, true, false, false, true, false, false, true, false, false, true, false, false, true, false, false};
-    boolean[] results = new boolean[expected.length];
+    ControllabilityCounterExampleChecker verifier = new ControllabilityCounterExampleChecker();
 
     for (int i = 0; i < allExampleNames.length; i++) {
+      if (expected[i]) continue;
       long start = System.nanoTime();
       final ControllabilityChecker checker = new ControllabilityChecker(allModels[i], desFactory);
       try {
-        results[i] = checker.run();
+        assertEquals(expected[i], checker.run());
       } catch (StateTupleEncoder.StateTupleSizeException e) {
         System.out.println(String.format("%s\n\tfailed due to state tuple size", allExampleNames[i]));
         continue;
       }
-      assertEquals(expected[i], results[i]);
+
+      SafetyCounterExampleProxy counterExample = checker.getCounterExample();
+      if (expected[i]) assertNull(counterExample);
+      else assertTrue(verifier.checkCounterExample(allModels[i], counterExample));
 
       long end = System.nanoTime();
       System.out.println(String.format("%s\n\trun time: %f seconds\n\tnumber of states: %d\n\tcontrollable: %s", allExampleNames[i], (end - start) / 1e9, allExampleSize[i], expected[i] ? "true" : "false"));

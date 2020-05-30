@@ -1,23 +1,23 @@
 package net.sourceforge.waters.analysis.comp552;
 
 import java.util.ArrayDeque;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Queue;
-import java.util.Set;
-import java.util.TreeSet;
 
 public class StateTupleSet {
-  private final Set<Long> states;
+  private final Map<Long, Long> states;
   private final Queue<Long> unvisitedStates;
 
   public StateTupleSet() {
-    states = new TreeSet<>();
+    states = new HashMap();
     unvisitedStates = new ArrayDeque<>();
   }
 
-  public void add(long state) {
+  public void add(long state, long previousState) {
     if (contains(state)) return;
 
-    states.add(state);
+    states.put(state, previousState);
     unvisitedStates.add(state);
   }
 
@@ -30,6 +30,10 @@ public class StateTupleSet {
   }
 
   public boolean contains(long state) {
-    return states.contains(state);
+    return states.containsKey(state);
+  }
+
+  public long getPrevious(long currentStateCode) {
+    return states.get(currentStateCode);
   }
 }
