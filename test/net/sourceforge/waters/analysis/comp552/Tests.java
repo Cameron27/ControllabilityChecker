@@ -101,7 +101,6 @@ public class Tests {
     ControllabilityCounterExampleChecker verifier = new ControllabilityCounterExampleChecker();
 
     for (int i = 0; i < allExampleNames.length; i++) {
-      if (expected[i]) continue;
       long start = System.nanoTime();
       final ControllabilityChecker checker = new ControllabilityChecker(allModels[i], desFactory);
       try {

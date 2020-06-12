@@ -84,7 +84,7 @@ public class ControllabilityChecker extends ModelChecker {
   private HashSet<EventProxy>[] eventsInAutomata;
 
   /**
-   * An array of mappings between source states and transitions states for each automata.
+   * An array of mappings between source states and transitions states for each automaton.
    */
   private HashMap<StateProxy, List<TransitionProxy>>[] transitionsBySource;
 
@@ -128,38 +128,49 @@ public class ControllabilityChecker extends ModelChecker {
    */
   @Override
   public boolean run() {
-    ProductDESProxy model = getModel();
+    setup();
 
-    setup(model);
-
+    // create state set and add initial state
     stateTupleSet = new StateTupleSet();
-    long initialStateCode = stateTupleEncoder.encode(getInitialState(automata));
+    long initialStateCode = stateTupleEncoder.encode(getInitialState());
     stateTupleSet.add(initialStateCode, initialStateCode);
 
     StateProxy[] nextState = new StateProxy[automata.length];
+    // continue while there are unvisited states
     while (stateTupleSet.containsUnvisited()) {
       long currentStateCode = stateTupleSet.removeUnvisited();
       StateProxy[] currentState = stateTupleEncoder.decode(currentStateCode);
 
+      // check every event for a legal transition
       for (EventProxy event : events) {
         StateProxy temp;
 
         boolean success = true;
+        // check the event for every state in the state tuple
         for (int i = 0; i < nextState.length; i++) {
           AutomatonProxy automaton = automata[i];
+          // check for implicit self loop
           if (!eventsInAutomata[i].contains(event)) {
             nextState[i] = currentState[i];
-          } else if ((temp = getTargetFromSourceAndEvent(i, currentState[i], event)) != null) {
+          }
+          // check for explicit transition
+          else if ((temp = getTargetFromSourceAndEvent(i, currentState[i], event)) != null) {
             nextState[i] = temp;
-          } else if (event.getKind() == EventKind.UNCONTROLLABLE && automaton.getKind() == ComponentKind.SPEC) {
+          }
+          // if no transition was found, the event is uncontrollable and the current state being checked is from a spec,
+          // fail and compute counter example
+          else if (event.getKind() == EventKind.UNCONTROLLABLE && automaton.getKind() == ComponentKind.SPEC) {
             mCounterExample = computeCounterExample(currentState, event);
             return false;
-          } else {
+          }
+          // the event does not work so stop
+          else {
             success = false;
             break;
           }
         }
 
+        // add new state if event worked
         if (success) {
           stateTupleSet.add(stateTupleEncoder.encode(nextState), currentStateCode);
         }
@@ -169,24 +180,44 @@ public class ControllabilityChecker extends ModelChecker {
     return true;
   }
 
+  /**
+   * Given a source state and event, finds the target state if a transition exists for that source and event. Dose not
+   * check for implicit self loops.
+   *
+   * @param automatonIndex Index of the automaton the source state is in.
+   * @param source         The source state.
+   * @param event          The event event to check for.
+   * @return The target state of the transition containing the source state and event, null if no such transition was found.
+   */
   private StateProxy getTargetFromSourceAndEvent(int automatonIndex, StateProxy source, EventProxy event) {
+    // get list of transitions for the source
     List<TransitionProxy> possibleTransitions = transitionsBySource[automatonIndex].get(source);
 
+    // check if any transitions exist, if not return null
     if (possibleTransitions == null) return null;
 
+    // check every transition for the specified event
     for (TransitionProxy possibleTransition : possibleTransitions) {
       if (possibleTransition.getEvent() == event) return possibleTransition.getTarget();
     }
 
+    // if nothing was found, return null
     return null;
   }
 
-  private StateProxy[] getInitialState(AutomatonProxy[] automata) {
+  /**
+   * Gets the initial state tuple.
+   *
+   * @return The initial state tuple.
+   */
+  private StateProxy[] getInitialState() {
     StateProxy[] initialState = new StateProxy[automata.length];
 
+    // for each automaton
     for (int i = 0; i < automata.length; i++) {
       AutomatonProxy automaton = automata[i];
 
+      // find the initial state
       for (StateProxy state : automaton.getStates()) {
         if (state.isInitial()) {
           initialState[i] = state;
@@ -198,17 +229,28 @@ public class ControllabilityChecker extends ModelChecker {
     return initialState;
   }
 
-  private void setup(ProductDESProxy model) {
-    automata = getAutomata(model);
-    events = getEvents(model);
-    eventsInAutomata = getEventsInAutomata(automata);
-    transitionsBySource = getTransitionsBySource(automata);
+  /**
+   * Setup all the data structures needed.
+   */
+  private void setup() {
+    automata = getAutomata();
+    events = getEvents();
+    eventsInAutomata = getEventsInAutomata();
+    transitionsBySource = getTransitionsBySource();
     stateTupleEncoder = new StateTupleEncoder(automata);
   }
 
-  private AutomatonProxy[] getAutomata(ProductDESProxy model) {
+  /**
+   * Creates an array of all the automata in the model with the plant models at the start and the specifications at
+   * the end.
+   *
+   * @return An array of all the automata in the model.
+   */
+  private AutomatonProxy[] getAutomata() {
     LinkedList<AutomatonProxy> automata = new LinkedList<>();
-    for (AutomatonProxy automaton : model.getAutomata()) {
+
+    // add each automaton to start or end of list
+    for (AutomatonProxy automaton : getModel().getAutomata()) {
       switch (automaton.getKind()) {
         case PLANT:
           automata.addFirst(automaton);
@@ -223,43 +265,71 @@ public class ControllabilityChecker extends ModelChecker {
     return automata.toArray(new AutomatonProxy[0]);
   }
 
-  private EventProxy[] getEvents(ProductDESProxy model) {
+  /**
+   * Creates an array of all the events in the model with the uncontrollable events at the start and the controllable
+   * events at the end.
+   *
+   * @return An array of all the events in the model.
+   */
+  private EventProxy[] getEvents() {
     LinkedList<EventProxy> events = new LinkedList<>();
-    for (EventProxy event : model.getEvents()) {
+
+    // add each event to start or end of list
+    for (EventProxy event : getModel().getEvents()) {
       switch (event.getKind()) {
-        case CONTROLLABLE:
+        case UNCONTROLLABLE:
           events.addFirst(event);
           break;
-        case UNCONTROLLABLE:
+        case CONTROLLABLE:
           events.addLast(event);
       }
     }
     return events.toArray(new EventProxy[0]);
   }
 
-  private HashSet<EventProxy>[] getEventsInAutomata(AutomatonProxy[] automata) {
+  /**
+   * Creates sets of all the events explicitly defined in each automaton.
+   *
+   * @return An array with the sets of events explicitly defined in each automaton.
+   */
+  private HashSet<EventProxy>[] getEventsInAutomata() {
     HashSet<EventProxy>[] eventsInAutomata = new HashSet[automata.length];
 
+    // create a set of events for each automaton
     for (int i = 0; i < automata.length; i++) {
       AutomatonProxy automaton = automata[i];
       eventsInAutomata[i] = new HashSet<>();
-      eventsInAutomata[i].addAll(automaton.getEvents());
+      for (EventProxy event : automaton.getEvents()) {
+        if (event.getKind() == EventKind.PROPOSITION) continue;
+        eventsInAutomata[i].add(event);
+      }
     }
 
     return eventsInAutomata;
   }
 
-  private HashMap<StateProxy, List<TransitionProxy>>[] getTransitionsBySource(AutomatonProxy[] automata) {
+  /**
+   * Creates a mapping between states and all the transitions with that state as a source for each automaton.
+   *
+   * @return An array with the mappings between states and transitions with that state as a source.
+   */
+  private HashMap<StateProxy, List<TransitionProxy>>[] getTransitionsBySource() {
     HashMap<StateProxy, List<TransitionProxy>>[] transitionsBySource = new HashMap[automata.length];
 
+    // create a mapping for each automaton
     for (int i = 0; i < transitionsBySource.length; i++) {
       AutomatonProxy automaton = automata[i];
 
       HashMap<StateProxy, List<TransitionProxy>> map = new HashMap<>();
+
+      // add each transition to the map
       for (TransitionProxy transition : automaton.getTransitions()) {
+        // add transition to list if mapping already exists
         if (map.containsKey(transition.getSource())) {
           map.get(transition.getSource()).add(transition);
-        } else {
+        }
+        // otherwise create new list and mapping
+        else {
           List<TransitionProxy> list = new ArrayList<>();
           list.add(transition);
           map.put(transition.getSource(), list);
@@ -271,9 +341,6 @@ public class ControllabilityChecker extends ModelChecker {
 
     return transitionsBySource;
   }
-
-  //#########################################################################
-  //# Simple Access Methods
 
   /**
    * Gets a counterexample if the model was found to be not controllable
@@ -311,19 +378,17 @@ public class ControllabilityChecker extends ModelChecker {
    * @return The computed counterexample.
    */
   private SafetyCounterExampleProxy computeCounterExample(StateProxy[] end, EventProxy last) {
-    final ProductDESProxyFactory desFactory = getFactory();
-    final ProductDESProxy des = getModel();
-    final String desName = des.getName();
-    final String traceName = desName + ":uncontrollable";
-    final Collection<EventProxy> events = des.getEvents();
-    final LinkedList<EventProxy> eventList = new LinkedList<>();
+    // the list of events to create a counter example
+    LinkedList<EventProxy> eventList = new LinkedList<>();
     eventList.add(last);
 
     long currentStateCode = stateTupleEncoder.encode(end);
     long previousStateCode;
+    long initialStateCode = stateTupleEncoder.encode(getInitialState());
     StateProxy[] currentState = stateTupleEncoder.decode(currentStateCode);
     StateProxy[] previousState;
-    long initialStateCode = stateTupleEncoder.encode(getInitialState(automata));
+
+    // trance backwards until initial state is reached
     while (currentStateCode != initialStateCode) {
       previousStateCode = stateTupleSet.getPrevious(currentStateCode);
 
@@ -336,25 +401,31 @@ public class ControllabilityChecker extends ModelChecker {
       currentStateCode = previousStateCode;
     }
 
-
-    return desFactory.createSafetyCounterExampleProxy(traceName, des, eventList);
+    // create counter example
+    ProductDESProxyFactory desFactory = getFactory();
+    String desName = getModel().getName();
+    String traceName = desName + ":uncontrollable";
+    return desFactory.createSafetyCounterExampleProxy(traceName, getModel(), eventList);
   }
 
+  /**
+   * Find an event that transitions from the specified source to the specified target.
+   *
+   * @param source The source state tuple.
+   * @param target The target state tuple.
+   * @return An event that transitions from the source to the target.
+   */
   private EventProxy getEventFromSourceAndTarget(StateProxy[] source, StateProxy[] target) {
+    // iterate over events to find an event that gets from the source to the target
     for (EventProxy event : events) {
       boolean success = true;
+      // iterate over each component of the source and target tuples to see if the event works
       for (int i = 0; i < source.length; i++) {
+        // check if a self loop is possible
         if (source[i] == target[i] && !eventsInAutomata[i].contains(event)) continue;
 
-        List<TransitionProxy> transitions = transitionsBySource[i].get(source[i]);
-        boolean subSuccess = false;
-        for (TransitionProxy transition : transitions) {
-          if (transition.getEvent() == event && transition.getTarget() == target[i]) {
-            subSuccess = true;
-            break;
-          }
-        }
-        if (subSuccess) continue;
+        // otherwise check if transition exists
+        if (transitionExists(source[i], target[i], event, i)) continue;
 
         success = false;
         break;
@@ -363,7 +434,32 @@ public class ControllabilityChecker extends ModelChecker {
       if (success) return event;
     }
 
-    assert false;
-    return null;
+    // this should never happen
+    throw new RuntimeException("No event from source to target found.");
+  }
+
+  /**
+   * Check if a transition exists for a given source state, target state and event.
+   *
+   * @param source         The source state.
+   * @param target         The target state.
+   * @param event          The event.
+   * @param automatonIndex The index of the automaton the source and target state are in.
+   * @return If the transitions exists in the automaton.
+   */
+  private boolean transitionExists(StateProxy source, StateProxy target, EventProxy event, int automatonIndex) {
+    // check all the transitions with the specified source
+    List<TransitionProxy> transitions = transitionsBySource[automatonIndex].get(source);
+
+    if (transitions == null) return false;
+
+    for (TransitionProxy transition : transitions) {
+      // see if transition has desired event and target
+      if (transition.getEvent() == event && transition.getTarget() == target) {
+        return true;
+      }
+    }
+
+    return false;
   }
 }
