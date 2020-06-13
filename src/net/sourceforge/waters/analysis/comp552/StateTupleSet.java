@@ -6,7 +6,7 @@ import java.util.Map;
 import java.util.Queue;
 
 /**
- * A set of state tuples, the previous state for all those states and a queue of unvisited states.
+ * A set of state tuples, the previous state for all those states and a queue of unexpanded states.
  */
 public class StateTupleSet {
   /**
@@ -15,20 +15,20 @@ public class StateTupleSet {
   private final Map<Long, Long> states;
 
   /**
-   * Queue of unvisited state tuples.
+   * Queue of unexpanded state tuples.
    */
-  private final Queue<Long> unvisitedStates;
+  private final Queue<Long> unexpandedStates;
 
   /**
    * Create an empty set of state tuples.
    */
   public StateTupleSet() {
     states = new HashMap();
-    unvisitedStates = new ArrayDeque<>();
+    unexpandedStates = new ArrayDeque<>();
   }
 
   /**
-   * Adds a state tuple to the sets and adds it to the queue of unvisited state tuples.
+   * Adds a state tuple to the sets and adds it to the queue of unexpanded state tuples.
    *
    * @param state         The state to add.
    * @param previousState The previous state of the state to add.
@@ -37,25 +37,25 @@ public class StateTupleSet {
     if (contains(state)) return;
 
     states.put(state, previousState);
-    unvisitedStates.add(state);
+    unexpandedStates.add(state);
   }
 
   /**
-   * Returns true if there are unvisited state tuples.
+   * Returns true if there are unexpanded state tuples.
    *
-   * @return True if there are unvisited state tuples.
+   * @return True if there are unexpanded state tuples.
    */
-  public boolean containsUnvisited() {
-    return !unvisitedStates.isEmpty();
+  public boolean containsUnexpanded() {
+    return !unexpandedStates.isEmpty();
   }
 
   /**
-   * Returns the first unvisited state tuple in the queue and removes it from the queue.
+   * Returns the first unexpanded state tuple in the queue and removes it from the queue.
    *
-   * @return The first unvisited state tuple in the queue.
+   * @return The first unexpanded state tuple in the queue.
    */
-  public long removeUnvisited() {
-    return unvisitedStates.remove();
+  public long popUnexpanded() {
+    return unexpandedStates.remove();
   }
 
   /**

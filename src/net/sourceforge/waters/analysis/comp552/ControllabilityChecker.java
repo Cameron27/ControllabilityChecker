@@ -138,8 +138,8 @@ public class ControllabilityChecker extends ModelChecker {
 
     StateProxy[] nextState = new StateProxy[automata.length];
     // continue while there are unvisited states
-    while (stateTupleSet.containsUnvisited()) {
-      long currentStateCode = stateTupleSet.removeUnvisited();
+    while (stateTupleSet.containsUnexpanded()) {
+      long currentStateCode = stateTupleSet.popUnexpanded();
       StateProxy[] currentState = stateTupleEncoder.decode(currentStateCode);
 
       // check every event for a legal transition
