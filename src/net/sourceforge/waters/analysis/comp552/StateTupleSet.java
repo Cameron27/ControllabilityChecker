@@ -46,7 +46,7 @@ public class StateTupleSet {
    * @return True if there are unvisited state tuples.
    */
   public boolean containsUnvisited() {
-    return unvisitedStates.peek() != null;
+    return !unvisitedStates.isEmpty();
   }
 
   /**

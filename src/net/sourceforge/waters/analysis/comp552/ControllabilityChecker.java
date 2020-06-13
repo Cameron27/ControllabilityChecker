@@ -33,6 +33,7 @@
 
 package net.sourceforge.waters.analysis.comp552;
 
+import net.sourceforge.waters.model.analysis.AnalysisException;
 import net.sourceforge.waters.model.base.ComponentKind;
 import net.sourceforge.waters.model.base.EventKind;
 import net.sourceforge.waters.model.des.*;
@@ -161,6 +162,7 @@ public class ControllabilityChecker extends ModelChecker {
           // fail and compute counter example
           else if (event.getKind() == EventKind.UNCONTROLLABLE && automaton.getKind() == ComponentKind.SPEC) {
             mCounterExample = computeCounterExample(currentState, event);
+            assert isCounterExample(mCounterExample);
             return false;
           }
           // the event does not work so stop
@@ -461,5 +463,21 @@ public class ControllabilityChecker extends ModelChecker {
     }
 
     return false;
+  }
+
+  /**
+   * Check that counter example is valid.
+   *
+   * @param counterExample Counter example to check.
+   * @return True if counter example is valid
+   */
+  private boolean isCounterExample(SafetyCounterExampleProxy counterExample) {
+    ControllabilityCounterExampleChecker verifier = new ControllabilityCounterExampleChecker();
+
+    try {
+      return verifier.checkCounterExample(getModel(), counterExample);
+    } catch (AnalysisException e) {
+      return false;
+    }
   }
 }
