@@ -67,7 +67,7 @@ public class StateTupleEncoder {
 
     // checks sum is under 64
     if (sum > 64) {
-      throw new StateTupleSizeException("A tuple of states for these automata cannot be stored in 64 bits.");
+      throw new StateTupleSizeException(String.format("A tuple of states for these automata cannot be stored in 64 bits, %d bits would be needed.", sum));
     }
   }
 
