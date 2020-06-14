@@ -5,6 +5,7 @@ import net.sourceforge.waters.model.des.StateProxy;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Used to convert between state tuples and state tuple codes.
@@ -13,7 +14,7 @@ public class StateTupleEncoder {
   /**
    * Array containing the hashmaps mapping between states and that states index in indexStateMaps for each automata.
    */
-  private final HashMap<StateProxy, Integer>[] stateIndexMaps;
+  private final Map<StateProxy, Integer>[] stateIndexMaps;
 
   /**
    * Array of masks for each automata.

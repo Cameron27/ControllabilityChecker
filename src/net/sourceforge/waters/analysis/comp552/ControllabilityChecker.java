@@ -82,12 +82,12 @@ public class ControllabilityChecker extends ModelChecker {
   /**
    * An array of the sets of event explicitly defined in the various automata in the model.
    */
-  private HashSet<EventProxy>[] eventsInAutomata;
+  private Set<EventProxy>[] eventsInAutomata;
 
   /**
    * An array of mappings between source states and transitions states for each automaton.
    */
-  private HashMap<StateProxy, List<TransitionProxy>>[] transitionsBySource;
+  private Map<StateProxy, List<TransitionProxy>>[] transitionsBySource;
 
   /**
    * A state tuple encoder to convert between a state tuple and the long representation of the state tuple.
@@ -294,8 +294,8 @@ public class ControllabilityChecker extends ModelChecker {
    *
    * @return An array with the sets of events explicitly defined in each automaton.
    */
-  private HashSet<EventProxy>[] getEventsInAutomata() {
-    HashSet<EventProxy>[] eventsInAutomata = new HashSet[automata.length];
+  private Set<EventProxy>[] getEventsInAutomata() {
+    Set<EventProxy>[] eventsInAutomata = new HashSet[automata.length];
 
     // create a set of events for each automaton
     for (int i = 0; i < automata.length; i++) {
@@ -315,14 +315,14 @@ public class ControllabilityChecker extends ModelChecker {
    *
    * @return An array with the mappings between states and transitions with that state as a source.
    */
-  private HashMap<StateProxy, List<TransitionProxy>>[] getTransitionsBySource() {
-    HashMap<StateProxy, List<TransitionProxy>>[] transitionsBySource = new HashMap[automata.length];
+  private Map<StateProxy, List<TransitionProxy>>[] getTransitionsBySource() {
+    Map<StateProxy, List<TransitionProxy>>[] transitionsBySource = new Map[automata.length];
 
     // create a mapping for each automaton
     for (int i = 0; i < transitionsBySource.length; i++) {
       AutomatonProxy automaton = automata[i];
 
-      HashMap<StateProxy, List<TransitionProxy>> map = new HashMap<>();
+      Map<StateProxy, List<TransitionProxy>> map = new HashMap<>();
 
       // add each transition to the map
       for (TransitionProxy transition : automaton.getTransitions()) {
